@@ -1,0 +1,5 @@
+#!env bash
+
+eval $(docker-machine env local)
+
+docker run -t -i --rm -v ~/src/technical-blog:/mnt/blog jmooredocker/jbake:v1.0.0 /opt/jbake/bin/jbake /mnt/blog/input /mnt/blog/output
