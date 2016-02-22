@@ -1,0 +1,55 @@
+= Generated files in Gradle
+Jim Moore
+2013-02-02
+:jbake-type: post
+:jbake-status: published
+:jbake-tags: groovy, gradle, wsdl, soap, java
+:idprefix:
+
+Gradle gives you tremendous flexibility to do whatever you need. Here's one approach to generating Java CXF stubs for a given WSDL:
+
+[source,groovy]
+----
+buildscript {
+    dependencies {
+        classpath "commons-io:commons-io:2.4"
+    }
+}
+
+configurations {
+    java2wsdl
+}
+
+dependencies {
+    java2wsdl "org.apache.cxf:cxf-tools-wsdlto-core:2.7.0"
+    java2wsdl "org.apache.cxf:cxf-tools-wsdlto-frontend-jaxws:2.7.0"
+    java2wsdl "org.apache.cxf:cxf-tools-wsdlto-databinding-jaxb:2.7.0"
+}
+
+def java2wsdl = task generateJavaFromWsdl(type: JavaExec) {
+    def wsdl = file('src/main/resources/wsdl/service.wsdl')
+    def genSrcDir = file("${buildDir}/generated-sources")
+
+    inputs.file  wsdl
+    outputs.dir genSrcDir
+
+    classpath configurations.java2wsdl
+    main "org.apache.cxf.tools.wsdlto.WSDLToJava"
+
+    args '-d', genSrcDir.toString(), wsdl.toString()
+
+    def byteArrayOutputStream = new org.apache.commons.io.output.ByteArrayOutputStream()
+    errorOutput = new org.apache.commons.io.output.TeeOutputStream(System.err, byteArrayOutputStream)
+    doLast {
+        def str = byteArrayOutputStream.toString()
+        if (str.contains('Usage : wsdl2java') || str.contains('WSDLToJava Error')) {
+            throw new TaskExecutionException(
+                    tasks[name],
+                    new IOException("WSDLToJava has failed. Please see output")
+            )
+        }
+    }
+}
+compileJava.dependsOn += java2wsdl
+compileJava.source java2wsdl.outputs.files, sourceSets.main.java
+----
