@@ -1,0 +1,399 @@
+= AEM 6.1 Packages and Bundles - Installing and Uninstalling Behavior
+Jim Moore
+2015-07-21 15:46:16 -0600
+:jbake-type: post
+:jbake-status: published
+:jbake-tags: AEM, Adobe, CQ, OSGi, Sling, JCR, Felix
+:idprefix:
+:toc:
+:toc-placement!:
+:toc-title:
+:toclevels: 3
+
+toc::[]
+
+== Purpose
+
+We're trying to use multiple packages to provide "`sub-applications`" and give Adobe AEM 6.1 more of a "`microservice`" feel. However, one of the major points of +++&micro;+++services is that they should be as "`self-contained`" as possible to allow for deployment flexibility. How practical is that in Apache Sling/Adobe AEM?
+
+When installing bundles using Sling's
+https://sling.apache.org/documentation/bundles/jcr-installer-provider.html[JCR Installer Provider]
+via the Package Manager, there are some interesting behaviors that can easily catch people unaware.
+
+== Setup
+
+To demonstrate, I created four packages with a single bundle -- `org.jsoup` --
+in each.
+
+[horizontal]
+tester1::
+  /apps/install/jsoup-1.7.1.jar
+tester2::
+  /apps/install/jsoup-1.7.1.jar
+tester3::
+  /apps/tester3/install/jsoup-1.7.1.jar
+tester4::
+  /apps/tester4/install/jsoup-1.8.2.jar
+
+They each have a `filter.xml` file that specifically uninstalls exactly the bundle file that package installs.
+
+== Results
+
+The details of each run follow, but the summary is:
+
+Installing the same bundle to the same location works, but is very order dependent when it comes to uninstallation.::
+  It works great if you uninstall in FILO order. (In other words, treat package installation like a stack.) The bundle is INSTALLED and ACTIVE with the first package. The second package takes a snapshot of the state of the path before writing, and since Felix notices that the bundle name and version haven't changed, it effectively ignores the operation. Uninstalling the second bundle, restoring the state of the path. Felix again notices that nothing about the bundle name and version have changed, so it does nothing. Finally, uninstalling the first package causes the bundle to be STOPPED, UNINSTALLED, and triggers a REFRESH.
++
+It gets much more surprising if you uninstall in FIFO order. Again, the bundle is INSTALLED and ACTIVE with the first package. The second package takes a snapshot of the state of the path before writing, and since Felix notices that the bundle name and version haven't changed, it effectively ignores the operation. *Uninstalling the first package removes the file from the path*, so it causes the bundle to be STOPPED, UNINSTALLED, and triggers a REFRESH. Even more interestingly, *uninstalling the second bundle causes the snapshot it had taken earlier to be restored*: putting the file back into the path and causing the bundle to once again be INSTALLED and ACTIVE -- even though both of the packages are now uninstalled!
+
+Installing the same bundle in different locations behaves "`reasonably.`"::
+  Because both files have the same bundle name and the same version, Felix sees the second one and goes "`Oh, I already have this INSTALLED, so don't try to install it again. But do take note of the fact that another file provides this bundle/version combination.`" Uninstalling in any order leaves the bundle INSTALLED until the last file providing the bundle is removed.
++
+There is a bug that causes Felix to not refresh the file providing the bundle when reporting on the bundle (such as in the Bundle view in the Felix web console). For example, install `tester1`, install `tester3`, uninstall `tester1` and the bundle information still thinks that the file from `tester1` is the source of the bundle. Fortunately, behavior-wise it makes no difference since it still properly uninstalls when `tester3` is removed.
+
+Felix can only handle a single instance of a bundle.::
+  What this means is that https://blogs.adobe.com/dekesmith/2014/03/05/how-to-have-changes-to-bundles-recognized-and-applied-during-development/[it has to follow some heuristics on what bundle to have ACTIVE at any time]. The gist is that it will use the highest version available.
++
+Installing `tester3` will causes `org.jsoup-1.7.1` to be ACTIVE. Installing `tester4` will cause Felix to UNINSTALL `org.jsoup-1.7.1` and then ACTIVATE `org.jsoup-1.8.2`.
++
+Uninstall `tester3` and then installing it again does nothing, because https://www.eclipse.org/virgo/documentation/virgo-documentation-3.6.0.M03/docs/virgo-user-guide/html/ch02s02.html#d0e341[Felix knows that `1.7.1` is lower than `1.8.2`].
++
+Note that a bundle version is independent from a package version. For example, if the bundle in `tester3` provided exactly the same package export information but its bundle name was changed to `foo.org.jsoup`, then the package `org.jsoup` could be available from the Service Locator with both versions 1.7.1 and 1.8.2.
+
+== Details
+
+I've done some editing of the logs to reduce noise.
+
+=== Test Cases
+
+==== Same Location - FILO
+
+Installing two packages that install the same bundle in the same location, then uninstall them http://techterms.com/definition/filo[FILO order].
+
+**Steps**: Install `tester1`, install `tester2`, uninstall `tester2`
+
+[source]
+--
+Install Package: /etc/packages/tester1-2.0.1-SNAPSHOT.zip
+
+Installing content
+Creating snapshot for package twc/webcms:tester1:2.0.1-SNAPSHOT
+A /apps/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-170] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT.
+*WARN* [qtp1419958956-170] org.apache.jackrabbit.oak.jcr.session.ItemImpl Item#refresh invokes Session#refresh!
+*INFO* [qtp1419958956-170] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.WatchedFolder Watching folder /apps/install (priority 200)
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Registering resource with OSGi installer: [InstallableResource, priority=200, id=/apps/install/jsoup-1.7.1.jar]
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent INSTALLED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Installed bundle org.jsoup [474] from resource TaskResource(url=jcrinstall:/apps/install/jsoup-1.7.1.jar, entity=bundle:org.jsoup, state=INSTALL, attributes=[org.apache.sling.installer.api.tasks.ResourceTransformer=:24:43:21:, Bundle-SymbolicName=org.jsoup, Bundle-Version=1.7.1], digest=1437503887562)
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent RESOLVED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTING
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Started bundle org.jsoup [474]
+--
+
+[source]
+--
+Install Package: /etc/packages/tester2-2.0.1-SNAPSHOT.zip
+
+Installing content
+Creating snapshot for package twc/webcms:tester2:2.0.1-SNAPSHOT
+A /apps/install/jsoup-1.7.1.jar
+Importing content...
+- /apps/install/jsoup-1.7.1.jar
+saving approx 0 nodes...
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-181] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester2:2.0.1-SNAPSHOT.
+*WARN* [qtp1419958956-181] org.apache.jackrabbit.oak.jcr.session.ItemImpl Item#refresh invokes Session#refresh!
+*INFO* [qtp1419958956-181] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester2:2.0.1-SNAPSHOT completed.
+--
+
+[source]
+--
+Uninstall Package: /etc/packages/tester2-2.0.1-SNAPSHOT.zip
+
+Uninstalling content
+Uninstalling package from snapshot twc/webcms/.snapshot:tester2:2.0.1-SNAPSHOT
+Importing content...
+- /apps/install/jsoup-1.7.1.jar
+saving approx 0 nodes...
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-170] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester2:2.0.1-SNAPSHOT
+*INFO* [qtp1419958956-170] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester2:2.0.1-SNAPSHOT completed.
+--
+
+NOTE: /apps/install/jsoup-1.7.1.jar is still around and ACTIVE
+
+
+==== Same Location - FIFO
+
+**Steps**: Install `tester1`, install `tester2`, uninstall `tester1`, uninstall `tester2`
+
+After restoring state to before with install of `tester1` then `tester2`...
+
+[source]
+--
+Uninstall Package: /etc/packages/tester1-2.0.1-SNAPSHOT.zip
+
+Uninstalling content
+Uninstalling package from snapshot twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT
+Importing content...
+D /apps/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-197] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT
+*INFO* [qtp1419958956-197] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Removing resource from OSGi installer: [/apps/install/jsoup-1.7.1.jar]
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STOPPING
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STOPPED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent UNRESOLVED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent UNINSTALLED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Uninstalled bundle org.jsoup [474] from resource TaskResource(url=jcrinstall:/apps/install/jsoup-1.7.1.jar, entity=bundle:org.jsoup, state=UNINSTALL, attributes=[org.apache.sling.installer.api.tasks.ResourceTransformer=:24:43:21:, Bundle-SymbolicName=org.jsoup, Bundle-Version=1.7.1], digest=1437503887562)
+*INFO* [FelixDispatchQueue] org.apache.felix.framework FrameworkEvent PACKAGES REFRESHED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Full package refreshing
+*INFO* [FelixDispatchQueue] org.apache.felix.framework FrameworkEvent PACKAGES REFRESHED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Done full package refresh
+--
+
+NOTE: /apps/install/jsoup-1.7.1.jar is gone around and UNINSTALLED
+
+NOTE: When you uninstall `tester2` /apps/install/jsoup-1.7.1.jar is put back and ACTIVE
+
+==== Different Locations - FILO
+
+STEPS: Install `tester1`, install `tester3`, uninstall `tester3`, uninstall `tester1`
+
+[source]
+--
+Install Package: /etc/packages/tester1-2.0.1-SNAPSHOT.zip
+
+Installing content
+Creating snapshot for package twc/webcms:tester1:2.0.1-SNAPSHOT
+A /apps/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-173] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT.
+*WARN* [qtp1419958956-173] org.apache.jackrabbit.oak.jcr.session.ItemImpl Item#refresh invokes Session#refresh!
+*INFO* [qtp1419958956-173] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Registering resource with OSGi installer: [InstallableResource, priority=200, id=/apps/install/jsoup-1.7.1.jar]
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent INSTALLED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Installed bundle org.jsoup [476] from resource TaskResource(url=jcrinstall:/apps/install/jsoup-1.7.1.jar, entity=bundle:org.jsoup, state=INSTALL, attributes=[org.apache.sling.installer.api.tasks.ResourceTransformer=:24:43:21:, Bundle-SymbolicName=org.jsoup, Bundle-Version=1.7.1], digest=1437504361359)
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent RESOLVED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTING
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Started bundle org.jsoup [476]
+--
+
+[source]
+--
+Installing content
+Creating snapshot for package twc/webcms:tester3:2.0.1-SNAPSHOT
+A /apps/tester3/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-220] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT.
+*WARN* [qtp1419958956-220] org.apache.jackrabbit.oak.jcr.session.ItemImpl Item#refresh invokes Session#refresh!
+*INFO* [qtp1419958956-220] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.WatchedFolder Watching folder /apps/tester3/install (priority 200)
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Registering resource with OSGi installer: [InstallableResource, priority=200, id=/apps/tester3/install/jsoup-1.7.1.jar]
+--
+
+[source]
+--
+Uninstall Package: /etc/packages/tester1-2.0.1-SNAPSHOT.zip
+
+Uninstalling content
+Uninstalling package from snapshot twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT
+D /apps/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-173] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT
+*INFO* [qtp1419958956-173] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester1:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Removing resource from OSGi installer: [/apps/install/jsoup-1.7.1.jar]
+--
+
+NOTE: Bundle is still ACTIVE and at /apps/install/jsoup-1.7.1.jar
+
+[source]
+--
+Uninstall Package: /etc/packages/tester3-2.0.1-SNAPSHOT.zip
+
+Uninstalling content
+Uninstalling package from snapshot twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT
+D /apps/tester3/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-244] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT
+*INFO* [qtp1419958956-244] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Removing resource from OSGi installer: [/apps/tester3/install/jsoup-1.7.1.jar]
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STOPPING
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STOPPED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent UNRESOLVED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent UNINSTALLED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Uninstalled bundle org.jsoup [476] from resource TaskResource(url=jcrinstall:/apps/install/jsoup-1.7.1.jar, entity=bundle:org.jsoup, state=UNINSTALL, attributes=[org.apache.sling.installer.api.tasks.ResourceTransformer=:24:43:21:, Bundle-SymbolicName=org.jsoup, Bundle-Version=1.7.1], digest=1437504361359)
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Full package refreshing
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Done full package refresh
+*INFO* [FelixDispatchQueue] org.apache.felix.framework FrameworkEvent PACKAGES REFRESHED
+*INFO* [FelixDispatchQueue] org.apache.felix.framework FrameworkEvent PACKAGES REFRESHED
+--
+
+NOTE: `org.jsoup` in UNINSTALLED
+
+==== Install A Bundle Then Install A Higher Version
+
+**Steps**: Install `tester3`, install `tester4`
+
+[source]
+--
+Install Package: /etc/packages/tester3-2.0.1-SNAPSHOT.zip
+
+Installing content
+Creating snapshot for package twc/webcms:tester3:2.0.1-SNAPSHOT
+A /apps/tester3/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-627] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT.
+*WARN* [qtp1419958956-627] org.apache.jackrabbit.oak.jcr.session.ItemImpl Item#refresh invokes Session#refresh!
+*INFO* [qtp1419958956-627] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Registering resource with OSGi installer: [InstallableResource, priority=200, id=/apps/tester3/install/jsoup-1.7.1.jar]
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent INSTALLED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Installed bundle org.jsoup [479] from resource TaskResource(url=jcrinstall:/apps/tester3/install/jsoup-1.7.1.jar, entity=bundle:org.jsoup, state=INSTALL, attributes=[org.apache.sling.installer.api.tasks.ResourceTransformer=:24:43:21:, Bundle-SymbolicName=org.jsoup, Bundle-Version=1.7.1], digest=1437510415744)
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent RESOLVED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTING
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Started bundle org.jsoup [479]
+--
+
+[source]
+--
+Install Package: /etc/packages/tester4-2.0.1-SNAPSHOT.zip
+
+Installing content
+Creating snapshot for package twc/webcms:tester4:2.0.1-SNAPSHOT
+A /apps/tester4/install/jsoup-1.8.2.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-627] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester4:2.0.1-SNAPSHOT.
+*WARN* [qtp1419958956-627] org.apache.jackrabbit.oak.jcr.session.ItemImpl Item#refresh invokes Session#refresh!
+*INFO* [qtp1419958956-627] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester4:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.WatchedFolder Watching folder /apps/tester4/install (priority 200)
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Registering resource with OSGi installer: [InstallableResource, priority=200, id=/apps/tester4/install/jsoup-1.8.2.jar]
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STOPPING
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STOPPED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent UNRESOLVED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent UPDATED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Updated bundle org.jsoup [479] from resource TaskResource(url=jcrinstall:/apps/tester4/install/jsoup-1.8.2.jar, entity=bundle:org.jsoup, state=INSTALL, attributes=[org.apache.sling.installer.api.tasks.ResourceTransformer=:24:43:21:, Bundle-SymbolicName=org.jsoup, Bundle-Version=1.8.2], digest=1437510445186)
+*INFO* [FelixDispatchQueue] org.apache.felix.framework FrameworkEvent PACKAGES REFRESHED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Refreshing 1 bundles: [org.jsoup [479]]
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Done refreshing 1 bundles
+*INFO* [FelixDispatchQueue] org.apache.felix.framework FrameworkEvent PACKAGES REFRESHED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent RESOLVED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTING
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Started bundle org.jsoup [479]
+--
+
+NOTE: It uninstalled the `1.7.1` version and installed `1.8.2`
+
+==== Uninstall Unused Bundle File
+
+**Steps**: With `tester3` and `tester4` installed, uninstall `tester3`
+
+[source]
+--
+Uninstall Package: /etc/packages/tester3-2.0.1-SNAPSHOT.zip
+
+Uninstalling content
+Uninstalling package from snapshot twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT
+D /apps/tester3/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-642] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT
+*INFO* [qtp1419958956-642] org.apache.jackrabbit.vault.packaging.impl.ZipVaultPackage Extracting twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Removing resource from OSGi installer: [/apps/tester3/install/jsoup-1.7.1.jar]
+--
+
+==== Install A Bundle Then Install A Lower Version
+
+**Steps**: Install `tester4` then install `tester3`
+
+[source]
+--
+Install Package: /etc/packages/tester4-2.0.1-SNAPSHOT.zip
+
+Installing content
+Creating snapshot for package twc/webcms:tester4:2.0.1-SNAPSHOT
+A /apps/tester4/install/jsoup-1.8.2.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-658] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester4:2.0.1-SNAPSHOT.
+*WARN* [qtp1419958956-658] org.apache.jackrabbit.oak.jcr.session.ItemImpl Item#refresh invokes Session#refresh!
+*INFO* [qtp1419958956-658] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester4:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Registering resource with OSGi installer: [InstallableResource, priority=200, id=/apps/tester4/install/jsoup-1.8.2.jar]
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent INSTALLED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Installed bundle org.jsoup [480] from resource TaskResource(url=jcrinstall:/apps/tester4/install/jsoup-1.8.2.jar, entity=bundle:org.jsoup, state=INSTALL, attributes=[org.apache.sling.installer.api.tasks.ResourceTransformer=:24:43:21:, Bundle-SymbolicName=org.jsoup, Bundle-Version=1.8.2], digest=1437510694392)
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent RESOLVED
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTING
+*INFO* [OsgiInstallerImpl] org.jsoup BundleEvent STARTED
+*INFO* [OsgiInstallerImpl] org.apache.sling.audit.osgi.installer Started bundle org.jsoup [480]
+--
+
+[source]
+--
+Install Package: /etc/packages/tester3-2.0.1-SNAPSHOT.zip
+
+Installing content
+Creating snapshot for package twc/webcms:tester3:2.0.1-SNAPSHOT
+A /apps/tester3/install/jsoup-1.7.1.jar
+Package imported.
+--
+
+[source]
+--
+*INFO* [qtp1419958956-673] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT.
+*WARN* [qtp1419958956-673] org.apache.jackrabbit.oak.jcr.session.ItemImpl Item#refresh invokes Session#refresh!
+*INFO* [qtp1419958956-673] org.apache.jackrabbit.vault.packaging.impl.JcrPackageImpl Creating snapshot for twc/webcms/.snapshot:tester3:2.0.1-SNAPSHOT completed.
+*INFO* [JcrInstaller.1] org.apache.sling.installer.provider.jcr.impl.JcrInstaller Registering resource with OSGi installer: [InstallableResource, priority=200, id=/apps/tester3/install/jsoup-1.7.1.jar]
+--
+
+NOTE: The bundle file `/apps/tester3/install/jsoup-1.7.1.jar` was registered with the OSGi installer, but the bundle was not actually installed because a higher version of the bundle name already exists.

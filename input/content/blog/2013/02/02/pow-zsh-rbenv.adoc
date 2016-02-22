@@ -1,0 +1,9 @@
+= Pow, ZSH, and Rbenv
+Jim Moore
+2013-02-02 16:32 -0700
+:jbake-type: post
+:jbake-status: published
+:jbake-tags: pow, zsh, rbenv
+:idprefix:
+
+Tommy Morgan wrote a useful post on http://wellbredgrapefruit.com/blog/2012/09/25/zsh/[using POW, ZSH and rbenv together].

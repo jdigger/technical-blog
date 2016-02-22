@@ -1,6 +1,6 @@
 = Generated files in Gradle
 Jim Moore
-2013-02-02
+2013-02-02 16:46 -0700
 :jbake-type: post
 :jbake-status: published
 :jbake-tags: groovy, gradle, wsdl, soap, java

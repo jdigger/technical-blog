@@ -1,0 +1,26 @@
+= Viewing Deleted Git Content
+Jim Moore
+2013-12-13 18:59:13 -0700
+:jbake-type: post
+:jbake-status: published
+:jbake-tags: git
+:idprefix:
+
+
+There's two steps to see the contents of a file that has been deleted in git.
+
+First, you need to know the https://www.kernel.org/pub/software/scm/git/docs/[tree-ish] for the commit when it was deleted:
+
+The tree-ish for the commit when it was deleted
+[source,shell]
+git log -1 --pretty=%h -- the_dir/the_filename.txt
+
+That asks for the latest https://www.kernel.org/pub/software/scm/git/docs/git-log.html[log] entry (`-1`) for `the_dir/the_filename.txt` and only outputs the ``short'' commit id (`--pretty=%h`). The branch is assumed to be `HEAD`, but you can specify that before the `--`. The `--` is needed before the filename or `git log` will try to interpret it as a tree-ish.
+
+Then simply show the content of the file in the commit immediately preceding that:
+
+Showing the content of a file immediately before commit 'da9ccfd':
+[source,bash]
+git show da9ccfd^:the_dir/the_filename.txt
+
+Where the `^` asks for the commit immediately preceding the tree-ish it annotates for https://www.kernel.org/pub/software/scm/git/docs/git-show.html[git show].

@@ -1,0 +1,224 @@
+= AEM 6.1 Package Manager metadata files
+Jim Moore
+2015-08-18 12:46:20 -0600
+:jbake-type: post
+:jbake-status: published
+:jbake-tags: AEM, Adobe, CQ, OSGi, Sling, JCR, Felix
+:idprefix:
+:toc:
+:toc-placement!:
+:toc-title:
+:toclevels: 3
+
+toc::[]
+
+== Purpose
+
+Sadly, the metadata files for AEM Package Manager are very, very poorly documented. To make matters worse, there is a lot of duplication and inconsistencies between them. There is a little bit of information at http://jackrabbit.apache.org/filevault/overview.html[the Apache Jackrabbit FileVault Documentation site], but it is focussed at the Vault filesystem and the like, not specifically how to use packages. http://docs.adobe.com/docs/en/aem/6-1/administer/content/package-manager.html[The Adobe 6.1 Package Manager documentation] discusses creating a package through the UI, but doesn't discuss any of the mechanics. https://docs.adobe.com/docs/en/cq/5-6-1/core/how_to/how_to_use_the_vlttool/vlt-mavenplugin.html#package[The Maven VLT plugin] talks a little about how to set up Maven, but has huge holes in what is actually done and what the values really mean.
+
+In an effort to get some better understanding, I've done a lot of reading, testing, and reverse engineering to come up with the following information. If anyone knows where I can learn more, I'd love to know and pass that along!
+
+== Simple Example Package
+
+[source,shell]
+----
+$ unzip -l tester-2.3.4.zip
+Archive:  tester-2.3.4.zip
+  Length     Date   Time    Name
+ --------    ----   ----    ----
+        0  08-17-15 01:12   META-INF/
+        0  08-17-15 01:12   META-INF/vault/
+     3592  08-17-15 01:12   META-INF/vault/config.xml
+      413  08-17-15 01:12   META-INF/vault/filter.xml
+      338  08-17-15 01:12   jcr_root/.content.xml
+        0  08-17-15 01:12   jcr_root/var/
+      244  08-17-15 01:12   jcr_root/var/.content.xml
+        0  08-17-15 01:12   jcr_root/var/clientlibs/
+      177  08-17-15 01:12   jcr_root/var/clientlibs/.content.xml
+        0  08-17-15 01:12   jcr_root/var/clientlibs/libs/
+      177  08-17-15 01:12   jcr_root/var/clientlibs/libs/.content.xml
+        0  08-17-15 01:12   jcr_root/var/clientlibs/libs/cq/
+      177  08-17-15 01:12   jcr_root/var/clientlibs/libs/cq/.content.xml
+        0  08-17-15 01:12   jcr_root/var/clientlibs/libs/cq/gui/
+      177  08-17-15 01:12   jcr_root/var/clientlibs/libs/cq/gui/.content.xml
+        0  08-17-15 01:12   jcr_root/var/clientlibs/libs/cq/gui/components/
+      177  08-17-15 01:12   jcr_root/var/clientlibs/libs/cq/gui/components/.content.xml
+        0  08-17-15 01:12   jcr_root/apps/
+      244  08-17-15 01:12   jcr_root/apps/.content.xml
+      308  08-17-15 01:12   META-INF/vault/nodetypes.cnd
+      986  08-17-15 01:12   META-INF/vault/properties.xml
+        0  08-17-15 01:12   META-INF/vault/definition/
+     2069  08-17-15 01:12   META-INF/vault/definition/.content.xml
+        0  08-17-15 01:12   META-INF/vault/definition/thumbnail/
+  1995232  08-17-15 01:06   META-INF/vault/definition/thumbnail/file
+        0  08-17-15 01:12   META-INF/vault/definition/thumbnail/file.dir/
+      297  08-17-15 01:12   META-INF/vault/definition/thumbnail/file.dir/.content.xml
+        0  08-17-15 01:12   META-INF/vault/definition/screenshots/
+        0  08-17-15 01:12   META-INF/vault/definition/screenshots/04780933-f5d5-4308-adb1-911f19a535c6/
+  3587494  08-17-15 01:12   META-INF/vault/definition/screenshots/04780933-f5d5-4308-adb1-911f19a535c6/file
+        0  08-17-15 01:12   META-INF/vault/definition/screenshots/04780933-f5d5-4308-adb1-911f19a535c6/file.dir/
+      298  08-17-15 01:12   META-INF/vault/definition/screenshots/04780933-f5d5-4308-adb1-911f19a535c6/file.dir/.content.xml
+    10598  08-17-15 01:12   META-INF/vault/definition/thumbnail.png
+ --------                   -------
+  5602998                   33 files
+----
+
+When the ZIP is uploaded to Package Manager, the content inside it under `META-INF/vault/` is extracted under `/etc/packages`. The "group" attribute is used to create a subdirectory to better, well, group things.
+
+image:/images/2015-08-18-aem-6-dot-1-package-manager-metadata-files_crxde.png[]
+
+The ZIP file itself is in the `tester-2.3.4.zip/jcr:content[jcr:data]` property.
+
+And what it looks like in Package Manager. Ignore most of the content there for now except to note the "`Group`", "`Package`" (i.e., "`name`"), "`Version`", and "`file`" fields. (Highlighted in green.)
+
+image:/images/2015-08-18-aem-6-dot-1-package-manager-metadata-files_pm1.png[]
+
+(Pointless side note: The thumbnail and screenshot images are from our family vacation to https://en.wikipedia.org/wiki/Glenwood_Caverns_Adventure_Park[Glenwood Canyons, CO] this year.)
+
+== The Files
+
+For our purposes here, the primary files are `META-INF/vault/properties.xml`, `META-INF/vault/definition/.context.xml` and `META-INF/vault/filter.xml`
+
+=== properties.xml
+
+==== Data
+
+This is a series of simple key/value pairs. Ignoring purely auto-generated entries like "`created`" and "`lastModifiedBy`", the "`interesting`" values are:
+
+[cols="1,1,10", options="header"]
+|===
+| Key | Example Value | Notes
+
+| group | twc/webcms | The "`group`" the project belongs to. Packages follow https://maven.apache.org/guides/mini/guide-naming-conventions.html[a GAV structure similar to Maven artifacts].
+One difference is that it can use a hierarchical naming structure, as shown in the example. It can not have a ":" or "," because they are used as delimiters.
+
+| name | tester | The package's name, namespaced by the group. Can not contain either a ":" or a "," because they are used as delimiters.
+
+| version | 2.3.4 | Can not contain either a ":" or a ",", but if you're following http://semver.org/[Semantic Versioning] that won't happen anyway. It is worth noting that while https://sling.apache.org/documentation/bundles/osgi-installer.html[the Sling OSGi installer handles "-SNAPSHOT" versions "`specially`"], Package Manager does not. While this field is not strictly required, there's no good reason to not at least arbitrarily assign a "1.0.0" to your packages to make it easier to know when there are any changes to them.
+
+| description | Testing | A nice description of the package
+
+| dependencies | twc:Sun-Misc-Fragment-Bundle:1.0.0,my_packages:6.1 Analytics Base | A coma-separated list of packages in GAV colon-delimited form ("group:name:version") that must exist before this package is installed. More on this later...
+
+| requiresRestart | false | Does the server require a restart after the package is installed?
+
+| requiresRoot | false | Can the package only be installed by an account with administrative privileges?
+
+| acHandling | overwrite | How should ACLs be handled during importing? "ignore" - preserve ACLs in the repository. "overwrite" - overwrite ACLs in the repository. "merge" - merge both sets of ACLs. "clear" - clear ACLs.
+
+|===
+
+Interestingly, `META-INF/vault/properties.xml` acts as the "master" datasource as far as Package Manager is concerned. For example, even though it looks like it's using the file name when it says `tester-2.3.4.zip` in both Package Manager and in `/etc/package`, that's only because we follow conventions to keep things consistent. Also, `META-INF/vault/definition/.content.xml` has all of the information in `properties.xml` (and a great deal more) and is exploded into the node structure under `/etc/packages`, but for everything we've seen so far `properties.xml` is king.
+
+==== Experimenting
+
+To see this in action, let's expand `tester-2.3.4.zip`, modify some of the values in `properties.xml` (leaving everything else identical), and then re-zip as `tester-2.3.6.zip`.
+
+[source,xml]
+----
+<entry key="group">twcz/webcms</entry>
+<entry key="name">testerz</entry>
+<entry key="version">2.3.5</entry>
+----
+
+If you're paying attention you should have noticed that the "`version`" in the file is "2.3.5" but the "`version`" in the filename is "2.3.6"...
+
+Uploading that into Package Manager gives:
+
+image:/images/2015-08-18-aem-6-dot-1-package-manager-metadata-files_pm2.png[]
+
+So even though the filename "`says`" the version is "2.3.6" and the `META-INF/vault/definition/.content.xml` says it's still 2.3.4, the version that is used in Package Manager is the 2.3.5 in `properties.xml`. Also the filename in the Download link ignores the name of the file we uploaded and instead uses the synthesis of the group (though you can't see it in the screen-shot), name and version.
+
+For completeness, here's what is in CRXDE:
+
+image:/images/2015-08-18-aem-6-dot-1-package-manager-metadata-files_crxde2.png[]
+
+Again, Package Manager uses the information extracted from `properties.xml` to create the base structure under `/etc/packages`.
+
+=== filter.xml
+
+The best documentation I've found for this is http://jackrabbit.apache.org/filevault/filter.html[the Jackrabbit docs on Workspace Filter], though even that could be better. If anyone has a better link, please let me know.
+
+For our purposes here I'll point out that then `filter.xml` information in a "`complete`" package is duplicated in the node structure under `vlt:definition/filter`. If you have a `filter.xml` file, its contents are used as the master data source. If that file is missing is when the node structure (in `definition/.context.xml`) is consulted.
+
+=== definition/.context.xml
+
+==== The Joys of Data Duplication
+
+This file duplicates **ALL** of the information in `properties.xml` and `filter.xml`, as well as adding additional metadata.
+
+If `properties.xml` exists, it acts as the master of all the information it contains. The duplicated information in `.content.xml` is only consulted if `properties.xml` simply does not exist. In fact, if `properties.xml` exists but is missing certain information -- such as "name" or "version" -- it is derived from the uploaded file rather than the values in `.content.xml`.
+
+Similarly, if `filter.xml` exists (even if it's empty) then the filter information that is in `.content.xml` is completely ignored.
+
+One way to approach this information duplication and "`interesting`" conflict resolution rules is to simply use `.content.xml` exclusively since it is a super-set of `properties.xml` and `filter.xml`. I know of at least a two issues with that, however. One is that some subsystems, such as http://www.wemblog.com/2012/04/how-to-install-multiple-package-in-cq.html[the crx-quickstart/install method of package installation], does not work properly if `properties.xml` is not there. Another is that `filter.xml` is what people are used to for working with VLT.
+
+That said, one advantage of the node-based approach is that it's fully programmable. You can add/remove/modify the filters for a package simply by modifying the node structure under the package, and it's automatically picked up by Package Manager. That makes it easy to create fully dynamic packages -- say using an http://www.day.com/specs/jcr/2.0/12_Observation.html[ObservationManager] to create, version and build types of content (coming from a JCR query) for legal compliance, for example.
+
+As a side note, the children under `vlt:definition/filter` can be named anything. http://www.day.com/specs/jcr/2.0/22_Same-Name_Siblings.html[The JCR may accept same-name siblings, but it may not], so it's best to use unique names. The default behavior of Package Manager's UI is to use an "f" followed by an incrementing number. ("f0", "f1", etc.) However I tried "`random`", "`bunny`", "`bunnies`" and it picked them up just fine.
+
+==== Data
+
+I won't bother duplicating here the information that's in the other files. What is added is:
+
+[cols="1,1,10", options="header"]
+|===
+
+| Key | Example Value | Notes
+
+| fixedBugs | +++freeform&nbsp;issues&nbsp;fixed+++ | This is completely freeform, so you can put anything in there. One thing that may catch people (it did me) is that if you do separate items on different lines through the UI, the newline is encoded as CR/LF and XML attribute encode as `"&#xd;&#xa;"`.
+
+| testedWith | AEM 6.1 | A freeform value usually with the version of CQ/AEM used. However, because it's not enforced in any way, it could be "`a warren of fuzzy bunnies`".
+
+| providerUrl | ++http://www.timewarnercable.com++ | The URL of the provider (e.g., company web site)
+
+| providerLink | ++http://www.timewarnercable.com/residential++ | A URL for the package provider (e.g., launch page provided by the package)
+
+| providerName | Time Warner Cable" | The name of the provider (e.g., company name)
+
+| replaces | [twc:something:3.4.5,twc/webcms:test:2.33] | Any packages that this may subsume. A classic example is the list of hotfixes that a service pack includes (and therefore the hotfixes should not be installed anymore).
+
+|===
+
+If you want to include a thumbnail, a `definition/thumbnail.png[jcr:primaryType=nt:file]` node is needed that contains the thumbnail. If you create the thumbnail through the UI, the original image is stored in `definition/thumbnail/file[jcr:primaryType=nt:file]`.
+
+If you want to include screenshots, a `definition/screenshots` tree is needed with named children contained `nt:file` nodes for each screenshot. If you create a screenshot with the Package Manager UI it will create an `nt:unstructured` node where the name is a UUID, with a subnode of `file[jcr:primaryType=nt:file]`.
+
+== Dependencies
+
+One of the coolest new features is that the "`dependencies`" metadata is finally being looked at in AEM 6. While you could set it before, violations were silent, making it pretty useless in practice.
+
+Let's take a look:
+
+image:/images/2015-08-18-aem-6-dot-1-package-manager-metadata-files_pm3.png[]
+
+So when you're visually scanning the list of packages in Package Manager, the red "dependencies!" shows you right away that there's an unsatisfied dependency. Expanding the package shows you what dependency is missing.
+
+If you use the REST interface to the package list, the JSON shows that the dependencies are resolved to their Package Manager ID, which is how the UI both knows how to do the link, and to know that the package could not be resolved.
+
+Using https://stedolan.github.io/jq/[the very cool "`jq`" tool], you can see this in action
+
+[source,zsh]
+----
+$ curl -u admin:admin -X POST http://localhost:4502/crx/packmgr/list.jsp | jq ".results[] | select(.dependencies[].id == \"\") | {path: .path, dependencies: .dependencies}"
+
+{
+  "path": "/etc/packages/tester-2.3.4.zip",
+  "dependencies": [
+    {
+      "name": "twc:Sun-Misc-Fragment-Bundle:1.0.0",
+      "id": "twc:Sun-Misc-Fragment-Bundle:1.0.0"
+    },
+    {
+      "name": "my_packages:6.1 Analytics Base",
+      "id": ""
+    }
+  ]
+}
+----
+
+In other words, it's now very easy to both manually and programmatically know if a package has everything it needs.
+
+== Conclusion
+
+Hopefully now it's clear what the various metadata contained in a Package Manager file is, how and where it's stored, the rules around their use, and some of the capabilities they bring. Please let me know what your experiences are!
