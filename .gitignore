@@ -1,2 +1,7 @@
 output/
 .gradle/
+*.iml
+*.ipr
+*.iws
+cache/
+buildSrc/build/

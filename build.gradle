@@ -1,33 +1,64 @@
 buildscript {
-  repositories {
-      mavenLocal()  // to use local JBake
-      jcenter()
-  }
+    repositories {
+        //   maven {
+        //       url="http://dl.bintray.com/calmdev/gradle-plugins/"
+        //   }
+        //   maven { url 'http://dl.bintray.com/antonmry/maven' }
+        jcenter()
+    }
 
-  dependencies {
-    classpath 'org.jbake:jbake-core:2.4.0'
-    classpath 'me.champeau.gradle:jbake-gradle-plugin:0.2'
-    classpath 'org.freemarker:freemarker:2.3.23' //2.3.19
-    classpath 'org.asciidoctor:asciidoctorj:1.5.3.2'
-    classpath 'org.pegdown:pegdown:1.6.0'
-  }
+    dependencies {
+        classpath 'org.jbake:jbake-core:2.4.0'
+        // classpath 'me.champeau.gradle:jbake-gradle-plugin:0.2.1'
+        // classpath 'me.champeau.gradle:jbake-gradle-plugin:0.3'
+        classpath 'org.ajoberstar:grgit:1.1.0'
+        classpath 'org.freemarker:freemarker:2.3.23' //2.3.19
+        classpath 'org.asciidoctor:asciidoctorj:1.5.3.2'
+        classpath 'org.pegdown:pegdown:1.6.0'
+        classpath 'com.bluepapa32:gradle-watch-plugin:0.1.4' // watch files and perform action
+    }
 }
 
-apply plugin: 'base'
-apply plugin: 'me.champeau.jbake'
+// apply plugin: 'base'
+apply plugin: JBakePlugin
+// apply plugin: 'me.champeau.jbake'
+apply plugin: 'idea'
+apply plugin: 'com.bluepapa32.watch'
+
+System.setProperty("java.awt.headless", "true")
+
+defaultTasks 'jbake'
 
 jbake {
-   input = file('src/jbake')
-   output = file('build/ghpages')
-   clearCache = true
-   outputs.dir file("$buildDir/ghpages")
+    // srcDirName = 'input'
+    // destDirName = 'output'
+    // input = file('input')
+    // output = file('output')
+    // outputs.dir = file('output')
+    clearCache = true
+    // outputs.dir file("$buildDir/ghpages")
+    pegdownVersion = '1.4.2'
+    freemarkerVersion = '2.3.22'
+    asciidoctorJavaIntegrationVersion = '0.1.4'
+    asciidoctorjVersion = '1.5.2'
+    configuration['render.tag'] = 'true'
+    configuration['db.store'] = 'local'
 }
-jbake.dependsOn clean
+// jbake.dependsOn clean
 
-task publish(type: GradleBuild) {
-    buildFile = 'gradle/publish.gradle'
-    tasks = ['publishGhPages']
-}
+// watch {
+//   jbake {
+//     files fileTree(dir: 'input')
+//     tasks 'jbake'
+//   }
+// }
+
+//task publish(dependsOn: 'jbakeBuild', type: GradleBuild) {
+//    System.setProperty('jna.nosys', 'true')
+//    buildFile = 'publish.gradle'
+//    tasks = ['publishGhPages']
+//}
+
 //publish.dependsOn jbake
 
 wrapper {

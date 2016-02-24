@@ -1,0 +1,11 @@
+repositories {
+    jcenter()
+}
+
+dependencies {
+    compile 'org.jbake:jbake-core:2.4.0'
+    compile 'org.freemarker:freemarker:2.3.23' //2.3.19
+    compile 'org.asciidoctor:asciidoctorj:1.5.3.2'
+    compile 'org.pegdown:pegdown:1.6.0'
+    compile 'commons-configuration:commons-configuration:1.6'
+}
