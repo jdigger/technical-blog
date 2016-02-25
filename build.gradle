@@ -1,15 +1,17 @@
 buildscript {
     repositories {
-        //   maven {
-        //       url="http://dl.bintray.com/calmdev/gradle-plugins/"
-        //   }
+           maven {
+               url="http://dl.bintray.com/calmdev/gradle-plugins/"
+           }
         //   maven { url 'http://dl.bintray.com/antonmry/maven' }
+        mavenLocal()
         jcenter()
     }
 
+    //noinspection GroovyAssignabilityCheck
     dependencies {
         classpath 'org.jbake:jbake-core:2.4.0'
-        // classpath 'me.champeau.gradle:jbake-gradle-plugin:0.2.1'
+        classpath 'me.champeau.gradle:jbake-gradle-plugin:0.2.1'
         // classpath 'me.champeau.gradle:jbake-gradle-plugin:0.3'
         classpath 'org.ajoberstar:grgit:1.1.0'
         classpath 'org.freemarker:freemarker:2.3.23' //2.3.19
@@ -20,8 +22,8 @@ buildscript {
 }
 
 // apply plugin: 'base'
-apply plugin: JBakePlugin
-// apply plugin: 'me.champeau.jbake'
+//apply plugin: JBakePlugin
+ apply plugin: 'me.champeau.jbake'
 apply plugin: 'idea'
 apply plugin: 'com.bluepapa32.watch'
 
