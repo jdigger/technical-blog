@@ -5,3 +5,4 @@ output/
 *.iws
 cache/
 buildSrc/build/
+build/
