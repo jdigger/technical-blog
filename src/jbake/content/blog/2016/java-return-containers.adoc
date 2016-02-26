@@ -1,0 +1,83 @@
+= Java Return Value Containers
+Jim Moore
+2016-02-25 12:46:20 -0600
+:jbake-type: post
+:jbake-status: published
+:jbake-tags: Java, JDK8, APIs, programming, reactive
+:idprefix:
+:toc:
+:toc-placement!:
+:toc-title:
+:toclevels: 3
+
+toc::[]
+
+== Purpose
+
+
+
+== Descriptions
+
+
+=== Iterator
+
+`Iterator` has been the standard way of iterating over a collection since JDK 1.2.
+
+In addition to its advantage of being the standard, its simplicity -- needing only `hasNext()` and `next()` defined --
+means that it can be used very effectively for anything that can be defined as a sequence; not just "normal"
+collections like List or Set.
+
+For example, it can provide a consistent way to iterate over things that may not fully reside in memory, such as a
+JDBC ResultSet, lines in a file, or pulling results from a remote service call. It's so flexible that
+https://github.com/google/guava[Google's Guava library] is heavily focused on working with `Iterator`.
+
+Its biggest issue is that it's stateful and not restartable, so it's single-use and explicitly not thread-safe.
+
+Another concern is that its interface is synchronous-only, so even though it can easily be backed by results of
+indeterminate timing, the only thing a caller can do is block.
+
+- Standard way of iterating over a collection since JDK 1.2
+- hasNext() and next() - does not have to be backed by an in-memory collection; could be "`hot`"
+- stateful: single use, can not be reused or shared across threads; can not be "`restarted`"
+- Guava has a lot of functions focused on these
+
+=== Iterable
+
+- Introduced in JDK 1.5 for the for( : ) syntax
+- iterator() - an idempotent operation
+- As long as the underlying structure is "`stable`", every generated Iterator will behave exactly the same
+- Guava has a lot of functions focussed on these
+
+=== Collection
+
+- Implements Iterable
+- Extends the "`promises`" of Iterable to include being "`stable-ish`" so that you can do things like ask for its size
+- Promises to not necessarily be stable by providing mutation methods (add, remove, etc.)
+- Provides a lot of conveniences, but because of its schizophrenic nature (unstable stability) it needs to be used with care when used in concurrent environments and to not expose internal details to unexpected mutation
+- While it's "`generally idiomatic`" to return an empty collection instead of null from methods, it's not universally true, so care must be taken
+
+=== Map / null
+
+- Can hold arbitrary data and easily extended, at the cost of static typing
+- "`null`" can be used anywhere
+- Especially if not carefully paired with JSR-305's @Nonnull/@Nullable it is easy to get NullPointerExceptions
+
+=== Optional
+
+- Essentially a collection with either zero or one element
+- Makes it explicit that there may not be a meaningful response (e.g., a "`find`" method where nothing was found), in which case essentially an empty collection is provided
+- Explicitly prevents NPEs as long as you follow its contracts
+- Can be treated like a Stream, complete with filtering, mapping, etc. Extends that capability with the ability to use a static or dynamic default, as well as throwing an exception if the result was empty.
+
+=== Future
+
+- A reference that may or may not point to something yet
+- Meant for concurrent programming, trying to get() its value will cause the current thread to block until another thread has provided it
+
+=== Stream
+
+- Spliterator xxxxxxxxxx
+
+=== Reactive Publisher
+
+
