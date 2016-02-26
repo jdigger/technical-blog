@@ -14,14 +14,23 @@ toc::[]
 
 == Purpose
 
+Over the years, Java has developed a number of ways for API designers pass values to-and-from methods/functions to both
+express static constraints (e.g., a class signature) as well as much richer semantic intent (e.g., "`Here's a pointer
+to a value that may or may not have a value now or at some point in the future.`") Some things, such as returning
+`null`, have fallen in and out of favor, with various techniques/hacks to deal with them. Especially in light of the
+increasingly complicated environments our code is running in, becoming increasingly dependent on external systems and
+massive amounts of data.
+
+I'll take a look at some of the primary ways that have grown up for passing information around, give a little bit of
+historical perspective, and the relative strengths, weaknesses, and general "`characteristics`" of each.
 
 
 == Descriptions
 
 
-=== Iterator
+=== java.util.Iterator
 
-`Iterator` has been the standard way of iterating over a collection since JDK 1.2.
+`java.util.Iterator` has been the standard way of iterating over a collection since JDK 1.2.
 
 In addition to its advantage of being the standard, its simplicity -- needing only `hasNext()` and `next()` defined --
 means that it can be used very effectively for anything that can be defined as a sequence; not just "normal"
@@ -31,24 +40,41 @@ For example, it can provide a consistent way to iterate over things that may not
 JDBC ResultSet, lines in a file, or pulling results from a remote service call. It's so flexible that
 https://github.com/google/guava[Google's Guava library] is heavily focused on working with `Iterator`.
 
-Its biggest issue is that it's stateful and not restartable, so it's single-use and explicitly not thread-safe.
+Its biggest issue is that it's stateful, single-use and explicitly not thread-safe. That can be a benefit, such as
+when it's fronting a data source where traversal back or restarting is impossible/impractical, such as streams of
+data coming from sensors or a large data-set that may be mutating underneath. But for "`traditional`" uses --
+essentially traversal over in-memory data-structures -- this can be a problem.
 
 Another concern is that its interface is synchronous-only, so even though it can easily be backed by results of
 indeterminate timing, the only thing a caller can do is block.
+
+==== Other Forms of Iterator
+
+`java.util.ListIterator` extends `Iterator` to takes advantage of knowing that it is backed by a `java.util.List` so
+it can move backward as well as forward, as well as doing basic modifications to the underlying `List`.
+
+http://docs.guava-libraries.googlecode.com/git/javadoc/com/google/common/collect/Iterators.html[Google Guava provides
+a lot of functions for working with and transforming Iterators]. Examples include filtering, exposing to-and-from
+`java.util.Enumeration` or an array, merging multiple Iterators into one, setting an upper-bound on results, checking
+for the existence of an element, etc.
+
+==== Iterator Summary
 
 - Standard way of iterating over a collection since JDK 1.2
 - hasNext() and next() - does not have to be backed by an in-memory collection; could be "`hot`"
 - stateful: single use, can not be reused or shared across threads; can not be "`restarted`"
 - Guava has a lot of functions focused on these
 
-=== Iterable
+=== java.util.Iterable
+
+`java.util.Iterable` was added to JDK 1.5 principally to support the new `for( : )` syntax.
 
 - Introduced in JDK 1.5 for the for( : ) syntax
 - iterator() - an idempotent operation
 - As long as the underlying structure is "`stable`", every generated Iterator will behave exactly the same
-- Guava has a lot of functions focussed on these
+- Guava has a lot of functions focused on these
 
-=== Collection
+=== java.util.Collection
 
 - Implements Iterable
 - Extends the "`promises`" of Iterable to include being "`stable-ish`" so that you can do things like ask for its size
@@ -56,28 +82,35 @@ indeterminate timing, the only thing a caller can do is block.
 - Provides a lot of conveniences, but because of its schizophrenic nature (unstable stability) it needs to be used with care when used in concurrent environments and to not expose internal details to unexpected mutation
 - While it's "`generally idiomatic`" to return an empty collection instead of null from methods, it's not universally true, so care must be taken
 
-=== Map / null
+=== java.util.Map / null
 
 - Can hold arbitrary data and easily extended, at the cost of static typing
 - "`null`" can be used anywhere
 - Especially if not carefully paired with JSR-305's @Nonnull/@Nullable it is easy to get NullPointerExceptions
 
-=== Optional
+=== java.util.Optional
 
-- Essentially a collection with either zero or one element
-- Makes it explicit that there may not be a meaningful response (e.g., a "`find`" method where nothing was found), in which case essentially an empty collection is provided
+- Essentially a collection with at most one element
+- Makes it explicit that there may not be a meaningful response (e.g., a "`find`" method where nothing was found),
+  in which case essentially an empty collection is provided, while also making it clear that there will not be "`many`"
+  (more than one) responses.
 - Explicitly prevents NPEs as long as you follow its contracts
 - Can be treated like a Stream, complete with filtering, mapping, etc. Extends that capability with the ability to use a static or dynamic default, as well as throwing an exception if the result was empty.
 
-=== Future
+=== java.util.concurrent.Future
 
 - A reference that may or may not point to something yet
 - Meant for concurrent programming, trying to get() its value will cause the current thread to block until another thread has provided it
 
-=== Stream
+=== java.util.stream.Stream
 
 - Spliterator xxxxxxxxxx
 
-=== Reactive Publisher
+=== org.reactivestreams.Publisher
 
+http://download.java.net/jdk9/docs/api/java/util/concurrent/Flow.html
+
+RxJava
+Reactor
+Akka
 

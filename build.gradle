@@ -10,7 +10,8 @@ buildscript {
 
     //noinspection GroovyAssignabilityCheck
     dependencies {
-        classpath 'org.jbake:jbake-core:2.4.0'
+        classpath 'org.jbake:jbake-core:2.5.0-SNAPSHOT'
+//        classpath 'org.jbake:jbake-core:2.4.0'
         classpath 'me.champeau.gradle:jbake-gradle-plugin:0.2.1'
         // classpath 'me.champeau.gradle:jbake-gradle-plugin:0.3'
         classpath 'org.ajoberstar:grgit:1.1.0'
