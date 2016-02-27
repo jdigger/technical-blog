@@ -28,9 +28,37 @@ historical perspective, and the relative strengths, weaknesses, and general "`ch
 == Descriptions
 
 
+=== java.util.Collection
+
+`java.util.Collection` and its progeny (`java.util.List`, `java.util.Set`, etc.) is the first place most developers
+reach for when they need to pass around a container of things. (It does not include, as many people assume,
+`java.util.Map`.)
+
+Fortunately, most people know enough to at least feel embarrassed if they have `public ArrayList<String> myMethod()`
+because they know that you shouldn't expose a concrete class when an interface will do. Fewer think about the semantic
+message they are expressing with a signature like `public List<String> myMethod()` though. Odds are they don't really
+mean that the order that values were inserted is significant -- they are just returning "`a set of stuff`". So
+`java.util.Set` may be a much better choice, but only if the uniqueness guarantee is true.
+
+==== ArrayList - a Blessing and Curse
+
+Generally speaking, the actual data structure that information has been gathered into is an `ArrayList` or the like, so
+then exposing it as a `java.util.Set` is at best awkward and at worst inefficient.
+
+That may be by design (e.g., the relative cost of inserting into and traversing a `HashSet` vs `ArrayList`) or by
+general habit (e.g., libraries and code examples tend to go for `ArrayList`). XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+
+- Implements Iterable
+- Extends the "`promises`" of Iterable to include being "`stable-ish`" so that you can do things like ask for its size
+- Promises to not necessarily be stable by providing mutation methods (add, remove, etc.)
+- Provides a lot of conveniences, but because of its schizophrenic nature (unstable stability) it needs to be used with care when used in concurrent environments and to not expose internal details to unexpected mutation
+- While it's "`generally idiomatic`" to return an empty collection instead of null from methods, it's not universally true, so care must be taken
+
 === java.util.Iterator
 
-`java.util.Iterator` has been the standard way of iterating over a collection since JDK 1.2.
+`java.util.Iterator` has been the standard way of iterating over a collection (specifically a `java.util.Collection`)
+since JDK 1.2.
 
 In addition to its advantage of being the standard, its simplicity -- needing only `hasNext()` and `next()` defined --
 means that it can be used very effectively for anything that can be defined as a sequence; not just "normal"
@@ -65,22 +93,24 @@ for the existence of an element, etc.
 - stateful: single use, can not be reused or shared across threads; can not be "`restarted`"
 - Guava has a lot of functions focused on these
 
+
 === java.util.Iterable
 
-`java.util.Iterable` was added to JDK 1.5 principally to support the new `for( : )` syntax.
+`java.util.Iterable` was added to JDK 1.5 principally to support the new `for( : )` syntax. In the process it also
+addressed one of the biggest problems with `Iterator`: being single-use.
+
+By making it possible to create a new instance of `Iterable` at any
+point, you trivially have the simplicity and power of `Iterator` available for the data source, the ability
+to "`restart`", and because each `Iterator` is a new independent instance they can be handed off across threads safely.
+
+Google's Guava team https://github.com/google/guava/wiki/CollectionUtilitiesExplained#iterables[wrote a piece on some
+of the reasons they prefer Iterables over Collections].
 
 - Introduced in JDK 1.5 for the for( : ) syntax
-- iterator() - an idempotent operation
+- `iterator()` is an idempotent operation
 - As long as the underlying structure is "`stable`", every generated Iterator will behave exactly the same
-- Guava has a lot of functions focused on these
-
-=== java.util.Collection
-
-- Implements Iterable
-- Extends the "`promises`" of Iterable to include being "`stable-ish`" so that you can do things like ask for its size
-- Promises to not necessarily be stable by providing mutation methods (add, remove, etc.)
-- Provides a lot of conveniences, but because of its schizophrenic nature (unstable stability) it needs to be used with care when used in concurrent environments and to not expose internal details to unexpected mutation
-- While it's "`generally idiomatic`" to return an empty collection instead of null from methods, it's not universally true, so care must be taken
+- http://docs.guava-libraries.googlecode.com/git/javadoc/com/google/common/collect/Iterators.html[Guava has a lot
+  of functions focused on these]
 
 === java.util.Map / null
 
