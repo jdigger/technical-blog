@@ -40,13 +40,23 @@ message they are expressing with a signature like `public List<String> myMethod(
 mean that the order that values were inserted is significant -- they are just returning "`a set of stuff`". So
 `java.util.Set` may be a much better choice, but only if the uniqueness guarantee is true.
 
-==== ArrayList - a Blessing and Curse
-
 Generally speaking, the actual data structure that information has been gathered into is an `ArrayList` or the like, so
 then exposing it as a `java.util.Set` is at best awkward and at worst inefficient.
 
 That may be by design (e.g., the relative cost of inserting into and traversing a `HashSet` vs `ArrayList`) or by
-general habit (e.g., libraries and code examples tend to go for `ArrayList`). XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+general habit (e.g., libraries and code examples tend to go for `ArrayList`).
+
+Given the speed and memory characteristics of `ArrayList` along with its tremendous flexibility, it is an
+excellent "`go to`" class, especially for simple needs. But of course, that implementation detail should not leak out
+in an API. Especially since `ArrayList` -- really any `java.util.Collection` -- has some significant drawbacks...
+
+One of the most obvious problems with a `Collection` is that its design is explicitly mutable. This can be a particular
+problem when exposing the state of an Object: you don't want outside callers accidentally modifying your Object's state
+through "`back channels`". This leads to the common practices of either making "`defensive copies`" or wrapping in
+something like `java.util.Collections.unmodifiableCollection(..)`. In either case, the API for what is returned still
+has those `add(..)` and `remove(..)` methods -- they may just either do nothing useful (defensive copy) or throw a
+exception at runtime (`UnsupportedOperationException`). Neither is exactly ideal, and you have to rely on documentation
+since your static typing is rendered useless.
 
 
 - Implements Iterable
@@ -58,15 +68,22 @@ general habit (e.g., libraries and code examples tend to go for `ArrayList`). XX
 === java.util.Iterator
 
 `java.util.Iterator` has been the standard way of iterating over a collection (specifically a `java.util.Collection`)
-since JDK 1.2.
+since JDK 1.2. It's such a basic utilitarian class that it really doesn't get its due.
 
 In addition to its advantage of being the standard, its simplicity -- needing only `hasNext()` and `next()` defined --
 means that it can be used very effectively for anything that can be defined as a sequence; not just "normal"
 collections like List or Set.
 
 For example, it can provide a consistent way to iterate over things that may not fully reside in memory, such as a
-JDBC ResultSet, lines in a file, or pulling results from a remote service call. It's so flexible that
-https://github.com/google/guava[Google's Guava library] is heavily focused on working with `Iterator`.
+JDBC ResultSet, lines in a file, or pulling results from a remote service call.
+
+It can also be an excellent way of representing infinite sequences, such as "`all positive numbers`". Or
+"`effectively infinite`" sequences because they'd be too large to be contained in any single process, such as
+"`all the web pages containing a word more than 10 characters long`" or pretty much anything falling into
+the "`big data`" category.
+
+It's so flexible that https://github.com/google/guava[Google's Guava library] is heavily focused on working
+with `Iterator`.
 
 Its biggest issue is that it's stateful, single-use and explicitly not thread-safe. That can be a benefit, such as
 when it's fronting a data source where traversal back or restarting is impossible/impractical, such as streams of
