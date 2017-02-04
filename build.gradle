@@ -66,5 +66,5 @@ jbake {
 //publish.dependsOn jbake
 
 wrapper {
-    gradleVersion = 2.11
+    gradleVersion = 3.3
 }
