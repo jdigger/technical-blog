@@ -1,0 +1,16 @@
+= Jim Moore's Technical Blog
+
+== Setup
+
+This uses https://jekyllrb.com/[Jekyll] with https://github.com/asciidoctor/jekyll-asciidoc[AsciiDoctor support] for publishing.
+
+https://github.com/rbenv/rbenv[Rbenv] is used to control the Ruby build environment, along with Bundler.
+
+[source,bash]
+--
+$ brew install rbenv ruby-build # macOS to get rbenv tools
+$ rbenv install `rbenv version-name`
+$ gem install bundler
+$ rbenv rehash
+$ bundle
+--
